@@ -1,0 +1,151 @@
+{
+  "creation": "2026-10-13 00:00:00.000000",
+  "docstatus": 0,
+  "doctype": "DocType",
+  "editable_grid": 1,
+  "engine": "InnoDB",
+  "field_order": [
+    "asn_number",
+    "reference_no",
+    "status",
+    "status_code",
+    "column_break_1",
+    "warehouse",
+    "created_at",
+    "completed_at",
+    "damaged_boxes",
+    "last_updated_at",
+    "section_items",
+    "items",
+    "section_link",
+    "purchase_order"
+  ],
+  "fields": [
+    {
+      "fieldname": "asn_number",
+      "fieldtype": "Data",
+      "label": "Inbound No",
+      "read_only": 1,
+      "reqd": 1,
+      "unique": 1,
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "description": "Fulfillmen inbound order (ASN) number. This is the record name."
+    },
+    {
+      "fieldname": "reference_no",
+      "fieldtype": "Data",
+      "label": "Reference No",
+      "read_only": 1,
+      "in_list_view": 1,
+      "search_index": 1,
+      "in_standard_filter": 1,
+      "description": "Reference given when the inbound order was booked (ReferenceNo)."
+    },
+    {
+      "fieldname": "status",
+      "fieldtype": "Data",
+      "label": "Status",
+      "read_only": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "status_code",
+      "fieldtype": "Data",
+      "label": "Status Code",
+      "read_only": 1,
+      "in_standard_filter": 1
+    },
+    {
+      "fieldname": "column_break_1",
+      "fieldtype": "Column Break",
+      "label": ""
+    },
+    {
+      "fieldname": "warehouse",
+      "fieldtype": "Data",
+      "label": "Warehouse",
+      "read_only": 1
+    },
+    {
+      "fieldname": "created_at",
+      "fieldtype": "Datetime",
+      "label": "Created At",
+      "read_only": 1
+    },
+    {
+      "fieldname": "completed_at",
+      "fieldtype": "Datetime",
+      "label": "Completed At",
+      "read_only": 1
+    },
+    {
+      "fieldname": "damaged_boxes",
+      "fieldtype": "Int",
+      "label": "Damaged Boxes",
+      "read_only": 1,
+      "description": "Boxes the warehouse flagged damaged on arrival."
+    },
+    {
+      "fieldname": "last_updated_at",
+      "fieldtype": "Datetime",
+      "label": "Last Updated At",
+      "read_only": 1
+    },
+    {
+      "fieldname": "section_items",
+      "fieldtype": "Section Break",
+      "label": "Lines"
+    },
+    {
+      "fieldname": "items",
+      "fieldtype": "Table",
+      "label": "Lines",
+      "options": "Fulfillmen Inbound Order Item",
+      "read_only": 1
+    },
+    {
+      "fieldname": "section_link",
+      "fieldtype": "Section Break",
+      "label": "Linked Document"
+    },
+    {
+      "fieldname": "purchase_order",
+      "fieldtype": "Link",
+      "label": "Purchase Order",
+      "options": "Purchase Order",
+      "description": "Filled in by whatever creates the Purchase Order. The connector never writes it."
+    }
+  ],
+  "links": [],
+  "modified": "2026-10-13 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Alaiy Os Connector Fulfillmen",
+  "name": "Fulfillmen Inbound Order",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "read": 1,
+      "report": 1,
+      "export": 1,
+      "role": "System Manager"
+    },
+    {
+      "read": 1,
+      "report": 1,
+      "role": "Stock Manager"
+    },
+    {
+      "read": 1,
+      "report": 1,
+      "role": "Purchase Manager"
+    }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": [],
+  "track_changes": 0,
+  "autoname": "field:asn_number",
+  "title_field": "asn_number",
+  "search_fields": "reference_no,status"
+}

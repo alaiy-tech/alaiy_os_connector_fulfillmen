@@ -1,0 +1,130 @@
+{
+  "creation": "2026-10-13 00:00:00.000000",
+  "docstatus": 0,
+  "doctype": "DocType",
+  "editable_grid": 1,
+  "engine": "InnoDB",
+  "field_order": [
+    "is_enabled",
+    "sb_connection",
+    "fulfillmen_base_url",
+    "fulfillmen_api_key",
+    "fulfillmen_warehouse_code",
+    "sb_webhook",
+    "webhook_url_note",
+    "webhook_app_key",
+    "webhook_access_token",
+    "webhook_customer_code",
+    "sb_schedule",
+    "fulfillmen_sync_interval",
+    "fulfillmen_outbound_lookback_days"
+  ],
+  "fields": [
+    {
+      "default": "0",
+      "fieldname": "is_enabled",
+      "fieldtype": "Check",
+      "label": "Enable Fulfillmen"
+    },
+    {
+      "fieldname": "sb_connection",
+      "fieldtype": "Section Break",
+      "label": "API Connection"
+    },
+    {
+      "default": "https://wms.fulfillmen.com",
+      "description": "Must be https: the API key travels in the request URL.",
+      "fieldname": "fulfillmen_base_url",
+      "fieldtype": "Data",
+      "label": "Base URL",
+      "reqd": 1
+    },
+    {
+      "description": "Customer API key from the Fulfillmen User Center (My Information, API interface). Read only: this connector never creates or changes anything in Fulfillmen.",
+      "fieldname": "fulfillmen_api_key",
+      "fieldtype": "Password",
+      "label": "API Key",
+      "reqd": 1
+    },
+    {
+      "description": "Optional. Read stock from this warehouse code only; empty sums every warehouse on the account.",
+      "fieldname": "fulfillmen_warehouse_code",
+      "fieldtype": "Data",
+      "label": "Warehouse Code"
+    },
+    {
+      "fieldname": "sb_webhook",
+      "fieldtype": "Section Break",
+      "label": "Webhook (optional)"
+    },
+    {
+      "fieldname": "webhook_url_note",
+      "fieldtype": "HTML",
+      "label": "Webhook URL",
+      "options": "<p>Give Fulfillmen this URL: <code>https://&lt;this site&gt;/api/method/alaiy_os_connector_fulfillmen.api.webhook.receive</code>. Notifications only trigger a re-read of the inbound order or SKU named in them.</p>"
+    },
+    {
+      "description": "Sent by Fulfillmen in the App-Key header. Required for the webhook to accept anything.",
+      "fieldname": "webhook_app_key",
+      "fieldtype": "Password",
+      "label": "Webhook App Key"
+    },
+    {
+      "description": "Sent in the Access-Token header. Checked only when set.",
+      "fieldname": "webhook_access_token",
+      "fieldtype": "Password",
+      "label": "Webhook Access Token"
+    },
+    {
+      "description": "Sent in the X-Customer-Code header. Checked only when set.",
+      "fieldname": "webhook_customer_code",
+      "fieldtype": "Data",
+      "label": "Webhook Customer Code"
+    },
+    {
+      "fieldname": "sb_schedule",
+      "fieldtype": "Section Break",
+      "label": "Sync Schedule"
+    },
+    {
+      "default": "Disabled",
+      "description": "How often to pull incoming shipments, stock, products and outbound orders.",
+      "fieldname": "fulfillmen_sync_interval",
+      "fieldtype": "Select",
+      "label": "Sync Interval",
+      "options": "Disabled\n5 min\n15 min\n30 min\n60 min"
+    },
+    {
+      "default": "30",
+      "description": "Shipped outbound orders created within this many days are re-read for tracking. Orders still in progress are always read.",
+      "fieldname": "fulfillmen_outbound_lookback_days",
+      "fieldtype": "Int",
+      "label": "Shipped Orders Look-back (Days)"
+    }
+  ],
+  "is_single": 1,
+  "links": [],
+  "modified": "2026-10-13 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Alaiy Os Connector Fulfillmen",
+  "name": "Fulfillmen Connector Settings",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "write": 1
+    }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": [],
+  "track_changes": 0
+}

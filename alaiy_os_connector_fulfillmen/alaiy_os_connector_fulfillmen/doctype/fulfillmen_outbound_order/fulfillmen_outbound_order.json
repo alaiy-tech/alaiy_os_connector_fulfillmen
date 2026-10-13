@@ -1,0 +1,179 @@
+{
+  "creation": "2026-10-13 00:00:00.000000",
+  "docstatus": 0,
+  "doctype": "DocType",
+  "editable_grid": 1,
+  "engine": "InnoDB",
+  "field_order": [
+    "order_no",
+    "reference_no",
+    "status",
+    "status_code",
+    "column_break_1",
+    "shipping_code",
+    "tracking_no",
+    "created_at",
+    "shipped_at",
+    "last_updated_at",
+    "section_tracking",
+    "tracking_status",
+    "tracking_status_code",
+    "tracking_events",
+    "section_items",
+    "items",
+    "section_link",
+    "delivery_note"
+  ],
+  "fields": [
+    {
+      "fieldname": "order_no",
+      "fieldtype": "Data",
+      "label": "Order No",
+      "read_only": 1,
+      "reqd": 1,
+      "unique": 1,
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "description": "Fulfillmen outbound order number. This is the record name."
+    },
+    {
+      "fieldname": "reference_no",
+      "fieldtype": "Data",
+      "label": "Reference No",
+      "read_only": 1,
+      "in_list_view": 1,
+      "search_index": 1,
+      "in_standard_filter": 1,
+      "description": "Customer reference given when the order was created (CsRefNo)."
+    },
+    {
+      "fieldname": "status",
+      "fieldtype": "Data",
+      "label": "Status",
+      "read_only": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "status_code",
+      "fieldtype": "Data",
+      "label": "Status Code",
+      "read_only": 1,
+      "in_standard_filter": 1
+    },
+    {
+      "fieldname": "column_break_1",
+      "fieldtype": "Column Break",
+      "label": ""
+    },
+    {
+      "fieldname": "shipping_code",
+      "fieldtype": "Data",
+      "label": "Shipping Service",
+      "read_only": 1
+    },
+    {
+      "fieldname": "tracking_no",
+      "fieldtype": "Data",
+      "label": "Tracking No",
+      "read_only": 1,
+      "search_index": 1
+    },
+    {
+      "fieldname": "created_at",
+      "fieldtype": "Datetime",
+      "label": "Created At",
+      "read_only": 1
+    },
+    {
+      "fieldname": "shipped_at",
+      "fieldtype": "Datetime",
+      "label": "Shipped At",
+      "read_only": 1,
+      "description": "Delivery time reported by the warehouse; empty until it ships."
+    },
+    {
+      "fieldname": "last_updated_at",
+      "fieldtype": "Datetime",
+      "label": "Last Updated At",
+      "read_only": 1
+    },
+    {
+      "fieldname": "section_tracking",
+      "fieldtype": "Section Break",
+      "label": "Tracking"
+    },
+    {
+      "fieldname": "tracking_status",
+      "fieldtype": "Data",
+      "label": "Tracking Status",
+      "read_only": 1
+    },
+    {
+      "fieldname": "tracking_status_code",
+      "fieldtype": "Data",
+      "label": "Tracking Status Code",
+      "read_only": 1
+    },
+    {
+      "fieldname": "tracking_events",
+      "fieldtype": "Long Text",
+      "label": "Tracking Events",
+      "read_only": 1
+    },
+    {
+      "fieldname": "section_items",
+      "fieldtype": "Section Break",
+      "label": "Lines"
+    },
+    {
+      "fieldname": "items",
+      "fieldtype": "Table",
+      "label": "Lines",
+      "options": "Fulfillmen Outbound Order Item",
+      "read_only": 1
+    },
+    {
+      "fieldname": "section_link",
+      "fieldtype": "Section Break",
+      "label": "Linked Document"
+    },
+    {
+      "fieldname": "delivery_note",
+      "fieldtype": "Link",
+      "label": "Delivery Note",
+      "options": "Delivery Note",
+      "description": "Filled in by whatever creates the Delivery Note. The connector never writes it."
+    }
+  ],
+  "links": [],
+  "modified": "2026-10-13 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Alaiy Os Connector Fulfillmen",
+  "name": "Fulfillmen Outbound Order",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "read": 1,
+      "report": 1,
+      "export": 1,
+      "role": "System Manager"
+    },
+    {
+      "read": 1,
+      "report": 1,
+      "role": "Stock Manager"
+    },
+    {
+      "read": 1,
+      "report": 1,
+      "role": "Purchase Manager"
+    }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": [],
+  "track_changes": 0,
+  "autoname": "field:order_no",
+  "title_field": "order_no",
+  "search_fields": "reference_no,status,tracking_no"
+}

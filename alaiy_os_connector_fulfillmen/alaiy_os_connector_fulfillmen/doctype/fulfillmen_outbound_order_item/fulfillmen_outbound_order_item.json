@@ -1,0 +1,39 @@
+{
+  "creation": "2026-10-13 00:00:00.000000",
+  "docstatus": 0,
+  "doctype": "DocType",
+  "editable_grid": 1,
+  "engine": "InnoDB",
+  "field_order": [
+    "sku",
+    "quantity"
+  ],
+  "fields": [
+    {
+      "fieldname": "sku",
+      "fieldtype": "Data",
+      "label": "SKU",
+      "read_only": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "quantity",
+      "fieldtype": "Float",
+      "label": "Quantity",
+      "read_only": 1,
+      "in_list_view": 1
+    }
+  ],
+  "links": [],
+  "modified": "2026-10-13 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Alaiy Os Connector Fulfillmen",
+  "name": "Fulfillmen Outbound Order Item",
+  "owner": "Administrator",
+  "permissions": [],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": [],
+  "track_changes": 0,
+  "istable": 1
+}

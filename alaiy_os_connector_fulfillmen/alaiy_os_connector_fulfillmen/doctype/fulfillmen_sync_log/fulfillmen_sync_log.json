@@ -1,0 +1,101 @@
+{
+  "autoname": "FFM-SYNC-.YYYY.-.MM.-.DD.-.######",
+  "creation": "2026-10-13 00:00:00.000000",
+  "docstatus": 0,
+  "doctype": "DocType",
+  "editable_grid": 1,
+  "engine": "InnoDB",
+  "field_order": [
+    "sync_type",
+    "trigger",
+    "status",
+    "started_at",
+    "finished_at",
+    "items_processed",
+    "items_updated",
+    "items_unmatched",
+    "items_failed",
+    "error_message"
+  ],
+  "fields": [
+    {
+      "fieldname": "sync_type",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Sync Type",
+      "options": "inbound\nstock\nproducts\noutbound\nwebhook"
+    },
+    {
+      "fieldname": "trigger",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Trigger",
+      "options": "scheduled\nmanual\nwebhook"
+    },
+    {
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Status",
+      "options": "queued\nrunning\nsuccess\nfailed"
+    },
+    {
+      "fieldname": "started_at",
+      "fieldtype": "Datetime",
+      "in_list_view": 1,
+      "label": "Started At"
+    },
+    {
+      "fieldname": "finished_at",
+      "fieldtype": "Datetime",
+      "label": "Finished At"
+    },
+    {
+      "default": "0",
+      "fieldname": "items_processed",
+      "fieldtype": "Int",
+      "label": "Items Processed"
+    },
+    {
+      "default": "0",
+      "fieldname": "items_updated",
+      "fieldtype": "Int",
+      "label": "Items Updated"
+    },
+    {
+      "default": "0",
+      "description": "Rows read from Fulfillmen that have no matching Purchase Order or Item. Not a failure.",
+      "fieldname": "items_unmatched",
+      "fieldtype": "Int",
+      "label": "Items Unmatched"
+    },
+    {
+      "default": "0",
+      "fieldname": "items_failed",
+      "fieldtype": "Int",
+      "label": "Items Failed"
+    },
+    {
+      "fieldname": "error_message",
+      "fieldtype": "Small Text",
+      "label": "Notes / Error"
+    }
+  ],
+  "links": [],
+  "modified": "2026-10-13 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Alaiy Os Connector Fulfillmen",
+  "name": "Fulfillmen Sync Log",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "read": 1,
+      "report": 1,
+      "role": "System Manager"
+    }
+  ],
+  "sort_field": "started_at",
+  "sort_order": "DESC",
+  "states": [],
+  "track_changes": 0
+}
