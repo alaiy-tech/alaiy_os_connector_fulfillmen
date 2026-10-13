@@ -14,7 +14,6 @@ from alaiy_os_connector_fulfillmen.fulfillmen.util import (
     split_across,
     to_datetime,
     to_number,
-    verify_webhook,
 )
 
 
@@ -50,16 +49,6 @@ class TestUtil(unittest.TestCase):
         self.assertEqual(split_across(25, [10, 10]), [10, 15])   # remainder on last
         self.assertEqual(split_across(0, [10, 10]), [0, 0])
         self.assertEqual(split_across(7, [10]), [7])
-
-    def test_verify_webhook(self):
-        h = {"App-Key": "k", "Access-Token": "t", "X-Customer-Code": "C1"}
-        self.assertTrue(verify_webhook(h, "k", "t", "C1"))
-        self.assertTrue(verify_webhook(h, "k"))
-        self.assertFalse(verify_webhook(h, "other"))
-        self.assertFalse(verify_webhook(h, "k", "wrong"))
-        self.assertFalse(verify_webhook(h, "k", None, "C2"))
-        self.assertFalse(verify_webhook({}, "k"))
-        self.assertFalse(verify_webhook(h, ""))     # unconfigured secret never matches
 
     def test_status_tables_are_consistent(self):
         # every polled status has a label; polled and terminal never overlap

@@ -14,9 +14,25 @@ acknowledged straight away with HTTP 200, as Fulfillmen requires, and processed
 in the background.
 """
 
+import hmac
+
 import frappe
 
-from alaiy_os_connector_fulfillmen.fulfillmen.util import verify_webhook
+
+def _verified(headers, app_key, access_token=None, customer_code=None):
+    """True when the request carries the configured credentials. App-Key is
+    mandatory; Access-Token and X-Customer-Code are checked only when
+    configured. Constant-time comparison."""
+    def same(got, want):
+        return hmac.compare_digest(str(got or "").encode(), str(want).encode())
+
+    if not app_key or not same(headers.get("App-Key"), app_key):
+        return False
+    if access_token and not same(headers.get("Access-Token"), access_token):
+        return False
+    if customer_code and not same(headers.get("X-Customer-Code"), customer_code):
+        return False
+    return True
 
 
 @frappe.whitelist(allow_guest=True, methods=["POST"])
@@ -25,7 +41,7 @@ def receive():
     if not settings.is_enabled:
         frappe.throw("Webhook not enabled.", frappe.PermissionError)
 
-    ok = verify_webhook(
+    ok = _verified(
         frappe.request.headers,
         settings.get_password("webhook_app_key", raise_exception=False),
         settings.get_password("webhook_access_token", raise_exception=False),

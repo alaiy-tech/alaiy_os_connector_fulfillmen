@@ -99,5 +99,5 @@ data; it only triggers a re-read through the authenticated API of the inbound or
 
 ## Tests
 
-`python -m unittest alaiy_os_connector_fulfillmen.tests.test_util` (pure helpers,
-no bench needed).
+`python -m unittest alaiy_os_connector_fulfillmen.tests.test_util alaiy_os_connector_fulfillmen.tests.test_webhook`
+(pure helpers, no bench needed).

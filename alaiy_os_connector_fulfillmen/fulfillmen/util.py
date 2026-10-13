@@ -5,7 +5,6 @@ Pure helpers with no Frappe dependency, so they can be checked with plain
 `python -m unittest` (see tests/test_util.py).
 """
 
-import hmac
 import re
 from urllib.parse import quote, quote_plus
 
@@ -88,22 +87,6 @@ def split_across(total, caps):
         out.append(take)
         left -= take
     return out
-
-
-def verify_webhook(headers, app_key, access_token=None, customer_code=None):
-    """True when the request carries the configured credentials. App-Key is
-    mandatory; Access-Token and X-Customer-Code are checked only when
-    configured. Constant-time comparison."""
-    def same(got, want):
-        return hmac.compare_digest(str(got or "").encode(), str(want).encode())
-
-    if not app_key or not same(headers.get("App-Key"), app_key):
-        return False
-    if access_token and not same(headers.get("Access-Token"), access_token):
-        return False
-    if customer_code and not same(headers.get("X-Customer-Code"), customer_code):
-        return False
-    return True
 
 
 def events_text(events):
