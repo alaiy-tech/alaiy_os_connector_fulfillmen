@@ -29,25 +29,34 @@ TIMEOUT_SECONDS = 30
 _ATTEMPTS = 3
 _MAX_PAGES = 500   # safety stop against a server that never returns an empty page
 
-# site_config.json key holding the customer API key, for a site that already
-# has it for one of this vendor's other APIs. See _api_key.
+# site_config.json keys. The first holds the customer API key; the second names
+# a *different* site_config key to read it from instead. See _api_key.
 SITE_CONFIG_KEY = "fulfillmen_api_key"
+SITE_CONFIG_KEY_ALIAS = "fulfillmen_api_key_config"
 
 
 def _api_key(settings):
     """The customer API key: the settings field, else the site's own config.
 
     The settings field wins, so a connector configured through the Desk behaves
-    exactly as before. The fallback exists because the same account key can
-    already be on the site for another of this vendor's APIs, and a key copied
-    into a second place is one that goes stale when it is rotated in the first.
+    exactly as before.
 
-    Read through frappe.conf rather than copied into the Password field: a value
-    the connector only reads never enters the database, a fixture or a backup of
-    one, and rotating it is still a single edit of site_config.json.
+    The site_config fallback exists because the same account key is often
+    already on the site under another name, held for one of this vendor's other
+    APIs. Copying it into a second place would make a credential that goes stale
+    the first time the original is rotated -- silently, because the connector
+    keeps answering with the old one until a call fails. So a site that already
+    has it points at it with `fulfillmen_api_key_config` rather than repeating
+    the value, and there is still exactly one copy of the secret on the site.
+
+    Read through frappe.conf either way: a value the connector only reads never
+    enters the database, a fixture or a backup of one.
     """
     stored = (settings.get_password("fulfillmen_api_key", raise_exception=False) or "").strip()
-    return stored or str(frappe.conf.get(SITE_CONFIG_KEY) or "").strip()
+    if stored:
+        return stored
+    alias = str(frappe.conf.get(SITE_CONFIG_KEY_ALIAS) or "").strip()
+    return str(frappe.conf.get(alias or SITE_CONFIG_KEY) or "").strip()
 
 
 class FulfillmenAPIError(Exception):
