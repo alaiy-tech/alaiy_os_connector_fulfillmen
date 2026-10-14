@@ -85,6 +85,12 @@ different answers, and a caller that cannot tell them apart reports "no stock"
 for an outage. Neither can be called from a browser directly — the API key is a
 URL query parameter, so the call only ever happens server-side.
 
+Both are thin wrappers. The calls themselves are `fulfillmen/stock.py`'s
+`read_page` and `warehouse_codes`, next to the sweep that walks the same
+endpoint, and the row mapping is `util.inventory_row` — so the path, the page
+size and the meaning of the two quantities are written down once and the sweep
+and these reads cannot drift apart.
+
 Without a warehouse code the read spans every warehouse, and the response
 carries no warehouse field, so a SKU held in two of them comes back as two rows
 that cannot be told apart. They are returned as given rather than summed:
@@ -125,5 +131,5 @@ data; it only triggers a re-read through the authenticated API of the inbound or
 
 ## Tests
 
-`python -m unittest alaiy_os_connector_fulfillmen.tests.test_util alaiy_os_connector_fulfillmen.tests.test_webhook alaiy_os_connector_fulfillmen.tests.test_inventory`
+`python -m unittest alaiy_os_connector_fulfillmen.tests.test_util alaiy_os_connector_fulfillmen.tests.test_webhook`
 (pure helpers, no bench needed).
