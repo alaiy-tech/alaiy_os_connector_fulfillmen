@@ -22,6 +22,7 @@ import time
 import frappe
 import requests
 
+from alaiy_os_connector_fulfillmen.fulfillmen import api_log
 from alaiy_os_connector_fulfillmen.fulfillmen.util import redact
 
 DEFAULT_BASE_URL = "https://wms.fulfillmen.com"
@@ -79,8 +80,29 @@ class FulfillmenClient:
         self.storage = (settings.fulfillmen_warehouse_code or "").strip() or None
 
     def get(self, path, **params):
+        """One API call, logged whatever happens to it.
+
+        The logging sits here rather than at each call site because this is the
+        only way out to Fulfillmen: a new caller is logged without having to
+        remember to be. One row per call, not per attempt -- a retry is this
+        method's business, and the duration covers all of them.
+        """
         params = {k: v for k, v in params.items() if v not in (None, "")}
         params["Key"] = self.key
+        started = time.monotonic()
+        # Filled in by _request as it gets them, so the log row can describe a
+        # call that ended in an exception as well as one that returned.
+        seen = {}
+        try:
+            data = self._request(path, params, seen)
+        except Exception as e:
+            api_log.record(path, params, self.key, started,
+                           resp=seen.get("resp"), data=seen.get("data"), error=e)
+            raise
+        api_log.record(path, params, self.key, started, resp=seen.get("resp"), data=data)
+        return data
+
+    def _request(self, path, params, seen):
         last = None
         for attempt in range(_ATTEMPTS):
             if attempt:
@@ -90,6 +112,7 @@ class FulfillmenClient:
             except requests.RequestException as e:
                 last = FulfillmenAPIError("Request failed: " + redact(e, self.key))
                 continue
+            seen["resp"] = resp
             if resp.status_code >= 500:
                 last = FulfillmenAPIError(f"HTTP {resp.status_code} from Fulfillmen.", resp.status_code)
                 continue
@@ -101,6 +124,7 @@ class FulfillmenClient:
                 raise FulfillmenAPIError("Fulfillmen did not return JSON.", resp.status_code) from None
             if not isinstance(data, dict):
                 raise FulfillmenAPIError("Unexpected Fulfillmen response shape.", resp.status_code) from None
+            seen["data"] = data
             code = str(data.get("Code") or data.get("code") or "")
             if code != "100":
                 msg = data.get("Enmessage") or data.get("enmessage") or data.get("message") or "request failed"
