@@ -10,6 +10,7 @@ from alaiy_os_connector_fulfillmen.fulfillmen.util import (
     TRACKING_STATUS,
     clean,
     events_text,
+    inventory_row,
     redact,
     split_across,
     to_datetime,
@@ -43,6 +44,30 @@ class TestUtil(unittest.TestCase):
         self.assertEqual(to_number(""), 0)
         self.assertEqual(to_number(None), 0)
         self.assertEqual(to_number("x", default=None), None)
+
+    def test_inventory_row(self):
+        self.assertEqual(
+            inventory_row(
+                {
+                    "SKU": "20190402001 ",
+                    "GoodsCode": "6925925700115",
+                    "TotalNumber": "7",
+                    "Number": "5",
+                    "temprownumber": "1",
+                }
+            ),
+            {"sku": "20190402001", "barcode": "6925925700115", "available": 7, "on_hand": 5},
+        )
+        # Omitted or empty quantities are no stock, not an absent figure: the
+        # sweep adds these up and a screen has to render something.
+        self.assertEqual(
+            inventory_row({"SKU": "A"}), {"sku": "A", "barcode": "", "available": 0, "on_hand": 0}
+        )
+        self.assertEqual(inventory_row({"SKU": "A", "TotalNumber": "", "Number": None})["available"], 0)
+        # Sellable and on-shelf differ by what is allocated but not yet picked,
+        # so neither stands in for the other.
+        row = inventory_row({"SKU": "A", "TotalNumber": "3", "Number": "10"})
+        self.assertEqual((row["available"], row["on_hand"]), (3, 10))
 
     def test_split_across(self):
         self.assertEqual(split_across(15, [10, 10]), [10, 5])
