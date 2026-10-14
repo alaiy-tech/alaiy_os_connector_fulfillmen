@@ -14,7 +14,7 @@ status held here.
 | **Fulfillmen Outbound Order** (+ lines table) | outbound order, named by the order number | customer reference, status and code, shipping service, waybill, created and ship time, tracking status and events; per line: SKU, quantity |
 | **Item** (read-only custom fields) | existing Item whose item code = SKU | `fulfillmen_available_stock`, `fulfillmen_shelf_stock`, `fulfillmen_stock_synced_at`, `fulfillmen_registered`, `fulfillmen_barcode`, `fulfillmen_qc_weight/length/width/height` |
 | **Fulfillmen Sync Log** | each run | queued / running / success / failed, processed / updated / unmatched / failed counts, notes |
-| **Fulfillmen API Log** | each API call | method, path, context, outcome, HTTP status, envelope `Code` and message, duration, query parameters (never the key), response excerpt |
+| **Fulfillmen API Log** | each API call | method, path, context, outcome, HTTP status, envelope `Code` and message, duration, query parameters (never the key), the response body in full |
 | **Fulfillmen Connector Settings** | single | enable, base URL, API key, warehouse code, webhook secrets, interval, look-back days |
 
 Every API field in the staging records is read only. The one exception is a Link
@@ -131,15 +131,17 @@ data; it only triggers a re-read through the authenticated API of the inbound or
 ## API call log
 
 Every call writes one **Fulfillmen API Log** row — path, context, outcome, HTTP
-status, the envelope `Code` and message, duration and a bounded response
-excerpt. Written from `FulfillmenClient.get`, which is the only way out to the
+status, the envelope `Code` and message, duration and the response body in
+full. Written from `FulfillmenClient.get`, which is the only way out to the
 API, so a new caller is logged without having to remember to be. One row per
 call rather than per attempt; the duration covers any retries.
 
 **The key is never stored.** This API takes it as a query parameter, so the
 parameters are the one place a secret could reach a log table: `Key` is dropped
 by name before the row is built, and every text field on the row is redacted by
-value afterwards, which also catches a response that echoed the request URL.
+value afterwards, which also catches a response that echoed the request URL —
+and matters more now that the body is kept whole, since the key could sit
+anywhere in it.
 
 Rows go out on their own database connection, committed immediately. Writing
 through the caller's transaction would mean either committing a half-finished
