@@ -108,8 +108,17 @@ data; it only triggers a re-read through the authenticated API of the inbound or
 
 ## Auth and safety
 
-- The customer API key goes in the `Key` query parameter of every request. It is
-  stored in a Password field and trimmed. Because it is part of the URL, every
+- The customer API key goes in the `Key` query parameter of every request. There
+  is no secret and nothing is signed, so the key is the whole credential. It is
+  read from the `fulfillmen_api_key` Password field, falling back to the site's
+  `site_config.json`. A site that already holds this account key under another
+  name, for one of the vendor's other APIs, sets
+  `"fulfillmen_api_key_config": "<that key's name>"` and the connector reads it
+  from there — so the site keeps one copy of the secret rather than a second one
+  that goes stale the first time the original is rotated. Otherwise the
+  connector looks for `fulfillmen_api_key` in `site_config.json` directly.
+  Either fallback is read through `frappe.conf` and never written to the
+  database. Because it is part of the URL, every
   error raised from the HTTP layer is rewritten without the key (also in its
   URL-encoded forms) and raised without its cause chain, so it cannot reach the
   Error Log or Sync Log.
