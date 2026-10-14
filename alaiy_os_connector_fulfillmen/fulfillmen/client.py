@@ -4,7 +4,10 @@
 HTTP client for the Fulfillmen WMS Open API. Read-only: every call is a GET.
 
 Auth: the customer API key (User Center, My Information, API interface) goes in
-the `Key` query parameter of every request. There is no token exchange. Because
+the `Key` query parameter of every request, from the connector's settings or,
+failing that, from the site's own config -- see `_api_key`. There is no token
+exchange and no secret: this API signs nothing, so an access key is the whole
+credential. Because
 the key is part of the URL, every error raised from here is rewritten without
 it and raised `from None`, so neither the message nor the exception chain (and
 therefore neither the Error Log nor the Sync Log) can contain the key.
@@ -26,6 +29,26 @@ TIMEOUT_SECONDS = 30
 _ATTEMPTS = 3
 _MAX_PAGES = 500   # safety stop against a server that never returns an empty page
 
+# site_config.json key holding the customer API key, for a site that already
+# has it for one of this vendor's other APIs. See _api_key.
+SITE_CONFIG_KEY = "fulfillmen_api_key"
+
+
+def _api_key(settings):
+    """The customer API key: the settings field, else the site's own config.
+
+    The settings field wins, so a connector configured through the Desk behaves
+    exactly as before. The fallback exists because the same account key can
+    already be on the site for another of this vendor's APIs, and a key copied
+    into a second place is one that goes stale when it is rotated in the first.
+
+    Read through frappe.conf rather than copied into the Password field: a value
+    the connector only reads never enters the database, a fixture or a backup of
+    one, and rotating it is still a single edit of site_config.json.
+    """
+    stored = (settings.get_password("fulfillmen_api_key", raise_exception=False) or "").strip()
+    return stored or str(frappe.conf.get(SITE_CONFIG_KEY) or "").strip()
+
 
 class FulfillmenAPIError(Exception):
     def __init__(self, message, status_code=None):
@@ -36,9 +59,11 @@ class FulfillmenAPIError(Exception):
 class FulfillmenClient:
     def __init__(self):
         settings = frappe.get_single("Fulfillmen Connector Settings")
-        self.key = (settings.get_password("fulfillmen_api_key", raise_exception=False) or "").strip()
+        self.key = _api_key(settings)
         if not self.key:
-            raise FulfillmenAPIError("API Key is not set.")
+            raise FulfillmenAPIError(
+                f"API Key is not set, in the settings or as {SITE_CONFIG_KEY} in site_config.json."
+            )
         self.base_url = (settings.fulfillmen_base_url or DEFAULT_BASE_URL).rstrip("/")
         if not self.base_url.startswith("https://"):
             raise FulfillmenAPIError("Base URL must use https; the API key is sent in the URL.")
