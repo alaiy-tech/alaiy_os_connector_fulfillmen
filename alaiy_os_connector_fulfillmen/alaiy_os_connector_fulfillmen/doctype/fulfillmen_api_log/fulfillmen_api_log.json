@@ -110,9 +110,10 @@
    "read_only": 1
   },
   {
+   "description": "The response as it arrived, in full — with the API key redacted, in case it was echoed back. The fieldname still says excerpt because the column predates the decision to keep the whole body.",
    "fieldname": "response_excerpt",
    "fieldtype": "Long Text",
-   "label": "Response Excerpt",
+   "label": "Response Body",
    "read_only": 1
   }
  ],

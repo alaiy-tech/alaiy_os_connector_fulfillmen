@@ -42,9 +42,14 @@ from alaiy_os_connector_fulfillmen.fulfillmen.util import redact
 DOCTYPE = "Fulfillmen API Log"
 _TABLE = "tabFulfillmen API Log"
 
-# Enough of a body to see what came back, bounded so a long list page cannot
-# turn the log table into the biggest thing on the site.
-_MAX_EXCERPT = 4000
+# The response is stored whole. A truncated body is the one that cuts off just
+# before the part that explains the failure, and these responses are bounded by
+# the API anyway -- it pages at 20 to 50 rows, so there is no unbounded answer
+# to guard against. The column is Long Text.
+#
+# The envelope message stays capped: it is a Small Text shown in a list view,
+# and a vendor that returns a wall of text there should not push the row width
+# around. The whole of it is in the body alongside.
 _MAX_MESSAGE = 500
 
 SUCCESS_CODE = "100"
@@ -98,7 +103,7 @@ def _row(path, params, key, started, resp=None, data=None, error=None):
     if error is not None:
         api_message = f"{type(error).__name__}: {error}"
 
-    excerpt = getattr(resp, "text", "") or ""
+    body = getattr(resp, "text", "") or ""
 
     return {
         "method": "GET",
@@ -110,7 +115,7 @@ def _row(path, params, key, started, resp=None, data=None, error=None):
         "duration_ms": int((time.monotonic() - started) * 1000),
         "query_params": safe_params(params, key),
         "api_message": redact(str(api_message), key)[:_MAX_MESSAGE] if api_message else None,
-        "response_excerpt": redact(excerpt, key)[:_MAX_EXCERPT],
+        "response_excerpt": redact(body, key),
     }
 
 

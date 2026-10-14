@@ -92,10 +92,22 @@ class TestOutcome(unittest.TestCase):
         self.assertEqual(row["outcome"], "Failed")
         self.assertEqual(row["status_code"], 403)
 
-    def test_the_excerpt_is_bounded(self):
+    def test_the_response_is_stored_whole(self):
+        # Not truncated: a cut-off body is the one that stops just before the
+        # part explaining the failure.
+        body = "x" * 20000
         row = _row("/api-json/getinventorylist.aspx", {}, KEY, time.monotonic(),
-                   resp=Resp(200, "x" * 20000), data={"Code": "100"})
-        self.assertLessEqual(len(row["response_excerpt"]), 4000)
+                   resp=Resp(200, body), data={"Code": "100"})
+        self.assertEqual(row["response_excerpt"], body)
+
+    def test_a_long_response_is_still_redacted(self):
+        # Keeping the whole body is what makes this matter: the key can sit
+        # anywhere in it, not just in the first few thousand characters.
+        body = "x" * 20000 + f"&Key={KEY}" + "y" * 20000
+        row = _row("/api-json/getinventorylist.aspx", {}, KEY, time.monotonic(),
+                   resp=Resp(200, body), data={"Code": "100"})
+        self.assertNotIn(KEY, row["response_excerpt"])
+        self.assertEqual(len(row["response_excerpt"]), len(body) - len(KEY) + len("***"))
 
 
 if __name__ == "__main__":
