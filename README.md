@@ -14,6 +14,7 @@ status held here.
 | **Fulfillmen Outbound Order** (+ lines table) | outbound order, named by the order number | customer reference, status and code, shipping service, waybill, created and ship time, tracking status and events; per line: SKU, quantity |
 | **Item** (read-only custom fields) | existing Item whose item code = SKU | `fulfillmen_available_stock`, `fulfillmen_shelf_stock`, `fulfillmen_stock_synced_at`, `fulfillmen_registered`, `fulfillmen_barcode`, `fulfillmen_qc_weight/length/width/height` |
 | **Fulfillmen Sync Log** | each run | queued / running / success / failed, processed / updated / unmatched / failed counts, notes |
+| **Fulfillmen API Log** | each API call | method, path, context, outcome, HTTP status, envelope `Code` and message, duration, query parameters (never the key), response excerpt |
 | **Fulfillmen Connector Settings** | single | enable, base URL, API key, warehouse code, webhook secrets, interval, look-back days |
 
 Every API field in the staging records is read only. The one exception is a Link
@@ -127,6 +128,29 @@ data; it only triggers a re-read through the authenticated API of the inbound or
   API-level failure (`Code` other than `100`) is not retried.
 - Paging stops on a short page; the API's `count` field is not relied on.
 
+## API call log
+
+Every call writes one **Fulfillmen API Log** row — path, context, outcome, HTTP
+status, the envelope `Code` and message, duration and a bounded response
+excerpt. Written from `FulfillmenClient.get`, which is the only way out to the
+API, so a new caller is logged without having to remember to be. One row per
+call rather than per attempt; the duration covers any retries.
+
+**The key is never stored.** This API takes it as a query parameter, so the
+parameters are the one place a secret could reach a log table: `Key` is dropped
+by name before the row is built, and every text field on the row is redacted by
+value afterwards, which also catches a response that echoed the request URL.
+
+Rows go out on their own database connection, committed immediately. Writing
+through the caller's transaction would mean either committing a half-finished
+sweep or losing the row to the caller's rollback — and a rolled-back call is
+usually the one worth having a row for. A failure to log is logged to the Error
+Log and never fails the call it was describing.
+
+Retention is 30 days, via frappe's Log Settings. The controller implements
+`clear_old_logs` because Log Settings silently ignores a doctype that does not,
+which is how a log table ends up unbounded.
+
 ## What it cannot see
 
 - The supplier's own courier tracking number and expected arrival date: the inbound
@@ -140,5 +164,5 @@ data; it only triggers a re-read through the authenticated API of the inbound or
 
 ## Tests
 
-`python -m unittest alaiy_os_connector_fulfillmen.tests.test_util alaiy_os_connector_fulfillmen.tests.test_webhook`
+`python -m unittest alaiy_os_connector_fulfillmen.tests.test_util alaiy_os_connector_fulfillmen.tests.test_webhook alaiy_os_connector_fulfillmen.tests.test_api_log`
 (pure helpers, no bench needed).

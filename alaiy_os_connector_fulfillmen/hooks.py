@@ -17,15 +17,30 @@ after_migrate = [
     "alaiy_os_connector_fulfillmen.setup.install.sync_connector_registry"
 ]
 
-# Register this connector's Sync Log under the Alaiy OS "Logs" sidebar section.
+# Register this connector's logs under the Alaiy OS "Logs" sidebar section.
 alaiy_os_sidebar_log_items = [
     {
         "link_type": "DocType",
         "link_to": "Fulfillmen Sync Log",
         "label": "Fulfillmen Logs",
         "icon": "activity",
-    }
+    },
+    {
+        "link_type": "DocType",
+        "link_to": "Fulfillmen API Log",
+        "label": "Fulfillmen API Calls",
+        "icon": "repeat",
+    },
 ]
+
+# One row per API call, and the sweep makes several every few minutes, so this
+# table grows faster than anything else the connector writes. Pruned by
+# frappe's Log Settings, which only accepts a doctype whose controller has
+# clear_old_logs -- the entry is dropped in silence otherwise, which is how a
+# log table ends up unbounded.
+default_log_clearing_doctypes = {
+    "Fulfillmen API Log": 30,
+}
 
 # Runs every minute; check_and_enqueue() decides whether a sync is actually due
 # from the interval configured in Fulfillmen Connector Settings.
