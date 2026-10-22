@@ -27,6 +27,7 @@ ORDER_STATUS = {
 }
 POLLED_ORDER_STATUSES = ["3", "4", "5", "11", "12"]   # in progress; shipped (6) is polled in a date window
 SHIPPED_ORDER_STATUS = "6"
+DRAFT_ORDER_STATUS = "1"   # not swept (the list would return every draft); stored drafts are re-read by number
 DELETED_ORDER_STATUS = "8"
 
 # GetTrackingInfo "Status" codes.

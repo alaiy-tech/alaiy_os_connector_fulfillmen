@@ -17,7 +17,13 @@
     "webhook_customer_code",
     "sb_schedule",
     "fulfillmen_sync_interval",
-    "fulfillmen_outbound_lookback_days"
+    "fulfillmen_outbound_lookback_days",
+    "sb_outbound_create",
+    "fulfillmen_allow_order_create",
+    "fulfillmen_customer_id",
+    "fulfillmen_default_shipping_code",
+    "fulfillmen_order_style",
+    "fulfillmen_order_status_on_create"
   ],
   "fields": [
     {
@@ -100,6 +106,46 @@
       "fieldname": "fulfillmen_outbound_lookback_days",
       "fieldtype": "Int",
       "label": "Shipped Orders Look-back (Days)"
+    },
+    {
+      "fieldname": "sb_outbound_create",
+      "fieldtype": "Section Break",
+      "label": "Outbound Orders (create)"
+    },
+    {
+      "default": "0",
+      "description": "Lets the connector create and cancel inbound and outbound orders at Fulfillmen when asked through its API. Off: the connector only reads.",
+      "fieldname": "fulfillmen_allow_order_create",
+      "fieldtype": "Check",
+      "label": "Allow creating and cancelling orders"
+    },
+    {
+      "description": "Your customer ID at Fulfillmen (sent as CustomerID).",
+      "fieldname": "fulfillmen_customer_id",
+      "fieldtype": "Data",
+      "label": "Customer ID"
+    },
+    {
+      "description": "Used when an order does not name one. Valid codes: list_shipping_services.",
+      "fieldname": "fulfillmen_default_shipping_code",
+      "fieldtype": "Data",
+      "label": "Default Shipping Service Code"
+    },
+    {
+      "default": "1",
+      "description": "1 = warehouse order (goods already stored at the warehouse; uses the Warehouse Code above), 2 = ordinary order.",
+      "fieldname": "fulfillmen_order_style",
+      "fieldtype": "Select",
+      "label": "Order Style",
+      "options": "1\n2"
+    },
+    {
+      "default": "Draft",
+      "description": "Draft: Fulfillmen holds the order until it is confirmed. Confirmed: Fulfillmen starts fulfilling it at once.",
+      "fieldname": "fulfillmen_order_status_on_create",
+      "fieldtype": "Select",
+      "label": "Status When Created",
+      "options": "Draft\nConfirmed"
     }
   ],
   "is_single": 1,
