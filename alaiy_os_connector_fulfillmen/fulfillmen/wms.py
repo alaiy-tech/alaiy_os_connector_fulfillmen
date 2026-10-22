@@ -109,7 +109,6 @@ def _keep_record(name, client, body, reply):
             _store(client, clean(reply["OrderNo"]), _as_payload(body), reply)
         elif name == "intercept_order" and clean((body or {}).get("OrderNo")):
             refresh_order(clean(body["OrderNo"]))
-            frappe.db.commit()
         elif name == "create_asn" and clean(reply.get("ASNNumber")):
             _refresh_asn(clean(reply["ASNNumber"]))
         elif name == "cancel_asn" and clean((body or {}).get("ASNNumber")):
@@ -135,4 +134,3 @@ def _refresh_asn(asn_number):
     from alaiy_os_connector_fulfillmen.fulfillmen.inbound import refresh_asn
 
     refresh_asn(asn_number)
-    frappe.db.commit()

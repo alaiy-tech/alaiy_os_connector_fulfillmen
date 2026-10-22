@@ -114,7 +114,6 @@ def cancel_order(order_no):
     except FulfillmenAPIError as e:
         frappe.throw(f"Fulfillmen refused the cancel: {e}")
     refresh_order(order_no)
-    frappe.db.commit()
     return {"order_no": order_no, "message": clean(reply.get("message"))}
 
 
@@ -132,7 +131,6 @@ def track_order(order_no=None, tracking_no=None):
     if order is None:
         frappe.throw("Fulfillmen has no outbound order for that number.")
     retry_on_conflict(store_order, client, order, lines)
-    frappe.db.commit()
     return frappe.db.get_value(
         DOCTYPE,
         clean(order.get("OrderNo")),
@@ -182,4 +180,3 @@ def _store(client, order_no, payload, reply):
             },
             [{"sku": p["SKU"], "quantity": to_number(p["Quantity"])} for p in payload["Products"]],
         )
-    frappe.db.commit()
