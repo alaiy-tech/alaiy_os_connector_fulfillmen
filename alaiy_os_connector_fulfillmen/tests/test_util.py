@@ -9,6 +9,7 @@ from alaiy_os_connector_fulfillmen.fulfillmen.util import (
     TRACKING_DONE,
     TRACKING_STATUS,
     clean,
+    collect_pages,
     events_text,
     inventory_row,
     redact,
@@ -89,6 +90,59 @@ class TestUtil(unittest.TestCase):
         self.assertEqual(events_text(events), "2026-01-01 10:00:00  a\n2026-01-01 11:00:00  b")
         self.assertEqual(events_text([]), "")
         self.assertEqual(events_text(None), "")
+
+
+class TestCollectPages(unittest.TestCase):
+    @staticmethod
+    def key(row):
+        return row["id"]
+
+    def test_stops_at_the_first_empty_page(self):
+        pages = {1: [{"id": 1}, {"id": 2}], 2: [{"id": 3}], 3: []}
+        calls = []
+
+        def fetch(page):
+            calls.append(page)
+            return pages.get(page, [])
+
+        self.assertEqual([r["id"] for r in collect_pages(fetch, self.key)], [1, 2, 3])
+        self.assertEqual(calls, [1, 2, 3])
+
+    def test_one_big_first_page_is_not_followed_by_a_guess(self):
+        # The inventory call returns every row on page 1 (38 here, documented size
+        # 20): reading must not depend on a page being shorter than a stated size.
+        big = [{"id": i} for i in range(38)]
+        calls = []
+
+        def fetch(page):
+            calls.append(page)
+            return big if page == 1 else []
+
+        self.assertEqual(len(collect_pages(fetch, self.key)), 38)
+        self.assertEqual(calls, [1, 2])
+
+    def test_a_page_that_adds_nothing_new_ends_the_read(self):
+        # A server that ignores the page number and repeats page 1 must not loop.
+        rows = [{"id": 1}, {"id": 2}]
+        calls = []
+
+        def fetch(page):
+            calls.append(page)
+            return rows
+
+        self.assertEqual(len(collect_pages(fetch, self.key)), 2)
+        self.assertEqual(calls, [1, 2])
+
+    def test_duplicates_across_pages_are_dropped_and_new_rows_kept(self):
+        pages = {1: [{"id": 1}, {"id": 2}], 2: [{"id": 2}, {"id": 3}], 3: []}
+        self.assertEqual([r["id"] for r in collect_pages(lambda p: pages.get(p, []), self.key)], [1, 2, 3])
+
+    def test_no_rows_at_all(self):
+        self.assertEqual(collect_pages(lambda page: [], self.key), [])
+
+    def test_safety_stop(self):
+        n = iter(range(10 ** 6))
+        self.assertEqual(len(collect_pages(lambda page: [{"id": next(n)}], self.key, max_pages=7)), 7)
 
 
 if __name__ == "__main__":

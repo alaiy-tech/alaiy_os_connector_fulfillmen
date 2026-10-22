@@ -18,8 +18,16 @@ Read only; no document is created.
   TotalNumber  available stock -> fulfillmen_available_stock
   Number       shelf stock     -> fulfillmen_shelf_stock
 
-A SKU held in several warehouses is summed, unless a Warehouse Code is set in
-the settings, in which case only that warehouse is read. The webhook for a
+A warehouse is mandatory for the inventory call (without `Storage` it answers
+code 108). A SKU held in several warehouses is summed. With a Warehouse Code set
+in the settings only that warehouse is read; without one every warehouse of the
+account is read, one after the other, from the warehouse list.
+
+The inventory call reports an empty page, a warehouse with no stock and a SKU
+with no stock as code 105 ("no inventory") instead of an empty list, and it
+returns every row on page 1 whatever the documented page size. So it is read
+until a page is empty, comes back as 105, or adds no new row (see
+`util.collect_pages`); 105 is "no rows" here and nothing else. The webhook for a
 product change re-reads just that SKU, so the stock value comes from the
 inventory call, never from the notification text.
 
@@ -35,14 +43,46 @@ meaningful for real edits.
 import frappe
 from frappe.utils import now_datetime
 
-from alaiy_os_connector_fulfillmen.fulfillmen.client import FulfillmenClient
+from alaiy_os_connector_fulfillmen.fulfillmen.client import FulfillmenAPIError, FulfillmenClient
 from alaiy_os_connector_fulfillmen.fulfillmen.common import new_result
-from alaiy_os_connector_fulfillmen.fulfillmen.util import clean, inventory_row, to_number
+from alaiy_os_connector_fulfillmen.fulfillmen.util import clean, collect_pages, inventory_row, to_number
 
 INVENTORY_PATH = "/api-json/getinventorylist.aspx"
 STORAGE_PATH = "/api-json/GetStorageList.aspx"
-PAGE_SIZE = 20   # fixed by the API
+PAGE_SIZE = 20   # the documented size; the API does not hold to it (see the module docstring)
+NO_STOCK_CODE = "105"   # the API's way of saying "no rows"
 _FIELDS = ["fulfillmen_available_stock", "fulfillmen_shelf_stock"]
+
+
+def _fetch(client, page, **filters):
+    """One page of rows. Code 105 is an empty answer, not an error."""
+    try:
+        return client.get(INVENTORY_PATH, page=page, **filters).get("data") or []
+    except FulfillmenAPIError as e:
+        if e.api_code == NO_STOCK_CODE:
+            return []
+        raise
+
+
+def _row_key(row):
+    return (clean(row.get("GoodsID")), clean(row.get("SKU")), clean(row.get("GoodsCode")))
+
+
+def _codes(client, storage=None):
+    """The warehouse codes to read: the one asked for, else the one in the
+    settings, else every warehouse of the account."""
+    chosen = clean(storage) or client.storage
+    if chosen:
+        return [chosen]
+    rows = client.get(STORAGE_PATH).get("data") or []
+    return [code for code in (clean(r.get("ShortName")) for r in rows) if code]
+
+
+def _inventory(client, code, sku=None):
+    """Every inventory row of one warehouse (optionally one SKU)."""
+    return collect_pages(
+        lambda page: _fetch(client, page, Storage=code, SKU=sku or None), _row_key
+    )
 
 
 def _totals(rows):
@@ -90,7 +130,10 @@ def apply_totals(totals, result):
 def sync_stock():
     client = FulfillmenClient()
     result = new_result()
-    totals = _totals(client.pages(INVENTORY_PATH, "page", PAGE_SIZE, Storage=client.storage))
+    codes = _codes(client)
+    rows = [row for code in codes for row in _inventory(client, code)]
+    totals = _totals(rows)
+    result["notes"].append(f"Read {len(codes)} warehouse(s): {', '.join(codes) or 'none'}.")
     apply_totals(totals, result)
 
     if totals:
@@ -118,7 +161,7 @@ def refresh_sku(sku):
     only rows for exactly this SKU are kept; no rows means it is out of stock."""
     client = FulfillmenClient()
     result = new_result()
-    rows = [r for r in client.pages(INVENTORY_PATH, "page", PAGE_SIZE, Storage=client.storage, SKU=sku)
+    rows = [r for code in _codes(client) for r in _inventory(client, code, sku)
             if clean(r.get("SKU")) == sku]
     apply_totals(_totals(rows) or {sku: [0, 0]}, result)
     frappe.db.commit()
@@ -141,24 +184,30 @@ def read_page(sku=None, storage=None, page=1):
     `_totals` sums them: that is safe over every page and wrong over one, where
     it would add up halves of two different pages.
 
-    `has_more` is a full page rather than the response's `count` -- the docs
-    call that a total without guaranteeing it, which is why `pages()` ignores
-    it too. A catalogue that is an exact multiple of the page size therefore
-    offers one empty last page, the harmless direction to be wrong in.
+    The warehouse is mandatory at Fulfillmen, so with none given and none in the
+    settings, page `page` of every warehouse is read and each row says which
+    warehouse it is from (`warehouse`), so a SKU held in two of them is two rows
+    that can be told apart.
 
-    Raises FulfillmenAPIError, like every other call here.
+    `has_more` is a full page rather than the response's `count` -- the docs
+    call that a total without guaranteeing it. The API may return more rows than
+    the documented page size, so a page after the last can be asked for: it comes
+    back as code 105, which is read as an empty page and ends the list.
+
+    Raises FulfillmenAPIError, like every other call here, except for code 105.
     """
     client = FulfillmenClient()
-    warehouse = clean(storage) or client.storage
-    raw = client.get(
-        INVENTORY_PATH,
-        page=page,
-        Storage=warehouse,
-        SKU=clean(sku) or None,
-    ).get("data") or []
-
-    rows = [row for row in (inventory_row(r) for r in raw) if row["sku"]]
-    return {"rows": rows, "warehouse": warehouse or None, "has_more": len(raw) >= PAGE_SIZE}
+    codes = _codes(client, storage)
+    rows, more = [], False
+    for code in codes:
+        raw = _fetch(client, page, Storage=code, SKU=clean(sku) or None)
+        more = more or len(raw) >= PAGE_SIZE
+        rows.extend({**row, "warehouse": code} for row in (inventory_row(r) for r in raw) if row["sku"])
+    return {
+        "rows": rows,
+        "warehouse": codes[0] if len(codes) == 1 else None,
+        "has_more": more,
+    }
 
 
 def warehouse_codes():
