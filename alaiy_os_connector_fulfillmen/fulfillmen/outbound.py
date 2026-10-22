@@ -6,7 +6,9 @@ for example for the first-mile carrier) and their tracking, and keeps one
 "Fulfillmen Outbound Order" record per order, named by the order number. The
 connector creates no Delivery Note or any other document, and nothing is created
 or changed in Fulfillmen: documents are made later, outside the connector, from
-these records.
+these records. Orders can also be created and cancelled on demand
+(outbound_create.py); a draft order created that way is kept current here by
+re-reading it by number until it leaves the draft status.
 
   GET /api-json/GetOrderList.aspx     list by OrderStatus / StartTime / EndTime (20 per page)
   GET /api-json/GetOrderDetails.aspx  one order by OrderNo: status code, TrackingNo, DeliveryTime, lines
@@ -31,6 +33,7 @@ from frappe.utils import add_days, getdate
 from alaiy_os_connector_fulfillmen.fulfillmen.client import FulfillmenClient
 from alaiy_os_connector_fulfillmen.fulfillmen.common import fail, new_result, retry_on_conflict, tally, upsert
 from alaiy_os_connector_fulfillmen.fulfillmen.util import (
+    DRAFT_ORDER_STATUS,
     ORDER_STATUS,
     POLLED_ORDER_STATUSES,
     SHIPPED_ORDER_STATUS,
@@ -53,9 +56,10 @@ def _order_numbers(client, **filters):
     return [clean(r.get("OrderNo")) for r in client.pages(LIST_PATH, "page", LIST_PAGE_SIZE, **filters) if r.get("OrderNo")]
 
 
-def fetch_order(client, order_no):
-    """(header dict, line dicts) for an order, or (None, [])."""
-    data = client.get(DETAIL_PATH, OrderNo=order_no)
+def fetch_order(client, order_no=None, tracking_no=None):
+    """(header dict, line dicts) for an order found by order number or waybill,
+    or (None, [])."""
+    data = client.get(DETAIL_PATH, OrderNo=order_no, TrackingNo=tracking_no)
     rows = (data.get("Order") or {}).get("data") or []
     return (rows[0], (data.get("Details") or {}).get("data") or []) if rows else (None, [])
 
@@ -135,7 +139,9 @@ def sync_outbound():
 
     # Stored in a live status but absent from the sweep: it has moved on. Read it
     # directly so the new state is stored.
-    live = frappe.get_all(DOCTYPE, filters={"status_code": ["in", POLLED_ORDER_STATUSES]}, pluck="name")
+    live = frappe.get_all(
+        DOCTYPE, filters={"status_code": ["in", POLLED_ORDER_STATUSES + [DRAFT_ORDER_STATUS]]}, pluck="name"
+    )
     store_numbers(client, sorted(set(live) - seen), result)
     return result
 

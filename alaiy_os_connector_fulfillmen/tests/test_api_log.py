@@ -26,6 +26,19 @@ class TestContext(unittest.TestCase):
         self.assertEqual(context_for("/api-json/getinventorylist.aspx"), "inventory")
         self.assertEqual(context_for("/api-json/GetStorageList.aspx"), "storage_list")
         self.assertEqual(context_for("/api-json/GetTrackingInfo.aspx"), "tracking")
+        self.assertEqual(context_for("/api-json/CreateOrder.aspx"), "outbound")
+        self.assertEqual(context_for("/api-json/InterceptOrder.aspx"), "outbound")
+        self.assertEqual(context_for("/api-json/CreateASN.aspx"), "inbound")
+        self.assertEqual(context_for("/api-json/CancelASN.aspx"), "inbound")
+
+    def test_row_records_the_method_and_no_body(self):
+        from types import SimpleNamespace
+        resp = SimpleNamespace(status_code=200, text="{}")
+        row = _row("/api-json/CreateOrder.aspx", {"Key": "K", "x": 1}, "K", 0.0, resp=resp,
+                   data={"Code": "100"}, method="POST")
+        self.assertEqual(row["method"], "POST")
+        self.assertEqual(row["outcome"], "Success")
+        self.assertNotIn("K", row["query_params"].replace('"x"', ""))
 
     def test_an_unmapped_path_is_other_not_a_crash(self):
         self.assertEqual(context_for("/api-json/SomethingNew.aspx"), "other")

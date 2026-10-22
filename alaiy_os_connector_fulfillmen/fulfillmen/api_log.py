@@ -65,6 +65,12 @@ _CONTEXTS = {
     "getorderlist.aspx": "outbound",
     "getorderdetails.aspx": "order_detail",
     "gettrackinginfo.aspx": "tracking",
+    "createorder.aspx": "outbound",
+    "interceptorder.aspx": "outbound",
+    "uploadlabel.aspx": "outbound",
+    "getlabelpdf.aspx": "outbound",
+    "createasn.aspx": "inbound",
+    "cancelasn.aspx": "inbound",
 }
 
 
@@ -83,7 +89,7 @@ def safe_params(params, key):
     return redact(json.dumps(shown, sort_keys=True, default=str), key)
 
 
-def _row(path, params, key, started, resp=None, data=None, error=None):
+def _row(path, params, key, started, resp=None, data=None, error=None, method="GET"):
     """The log row for one call, whatever happened to it."""
     status = int(getattr(resp, "status_code", 0) or 0)
 
@@ -106,7 +112,7 @@ def _row(path, params, key, started, resp=None, data=None, error=None):
     body = getattr(resp, "text", "") or ""
 
     return {
-        "method": "GET",
+        "method": method,
         "path": str(path),
         "context": context_for(path),
         "outcome": "Failed" if failed else "Success",
@@ -140,14 +146,14 @@ def _write(row):
         conn.close()
 
 
-def record(path, params, key, started, resp=None, data=None, error=None):
+def record(path, params, key, started, resp=None, data=None, error=None, method="GET"):
     """Log one call. Never raises, never fails the call it is describing."""
     try:
         # Imported without a site (a plain python shell, the pure unit tests):
         # there is nothing to write to, and that is not an error.
         if not getattr(frappe.local, "conf", None):
             return
-        _write(_row(path, params, key, started, resp=resp, data=data, error=error))
+        _write(_row(path, params, key, started, resp=resp, data=data, error=error, method=method))
     except Exception:
         try:
             frappe.log_error(title="Fulfillmen API Log write failed", message=frappe.get_traceback())

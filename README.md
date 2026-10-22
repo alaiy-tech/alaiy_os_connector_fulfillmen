@@ -1,10 +1,13 @@
 # Alaiy OS Connector: Fulfillmen
 
 Reads from the Fulfillmen WMS Open API and keeps what it learns in its own
-records. It is read only: nothing is created, changed or cancelled in Fulfillmen,
-and the connector creates **no Purchase Order, Delivery Note, Sales Invoice or any
-other ERPNext document**. Those are created later, outside the connector, from the
-status held here.
+records. By default it is read only. Inbound and outbound orders can also be
+created and cancelled at Fulfillmen on demand (see below), but only after **Allow
+creating and cancelling orders** is turned on in the settings. The connector creates **no
+Purchase Order, Delivery Note, Sales Invoice or any other ERPNext document**, and
+it reads none: it works from the data it is given and keeps results in its own
+records. Documents are created later, outside the connector, from the status held
+here.
 
 ## What it stores
 
@@ -65,6 +68,86 @@ about two hours, so they are not stored.
   triggers: `api.sync.trigger_inbound_sync`, `trigger_stock_sync`,
   `trigger_products_sync`, `trigger_outbound_sync`; the first two are on the
   connector card.
+
+## Outbound orders: create, cancel, track
+
+Off until **Allow creating and cancelling orders** is set (and **Enable Fulfillmen**).
+The same switch covers the inbound create and cancel of the clone below. Settings used: Customer ID, Default Shipping Service Code, Order Style (1 warehouse
+order, which also uses **Warehouse Code**; 2 ordinary order) and Status When Created
+(Draft by default: Fulfillmen holds a draft until it is confirmed; Confirmed makes
+Fulfillmen start fulfilling it).
+
+| Call (`api.outbound.`) | Fulfillmen call | Does |
+|---|---|---|
+| `create_outbound_order(order, confirm)` | `POST CreateOrder.aspx` | Creates an order from the data given and stores it in Fulfillmen Outbound Order. `confirm` 1 sends it confirmed, 0 as a draft, empty uses the setting. |
+| `cancel_outbound_order(order_no)` | `POST InterceptOrder.aspx` | Cancels by order number or waybill, then re-reads the order. |
+| `track_outbound_order(order_no, tracking_no)` | `GET GetOrderDetails.aspx`, `GetTrackingInfo.aspx` | Reads one order of the account by order number or waybill, stores it, returns status, waybill and tracking events. Read only. |
+| `list_shipping_services()` | `GET GetShippingList.aspx` | Valid shipping service codes. |
+| `list_warehouses()` | `GET GetStorageList.aspx` | Valid warehouse codes. |
+
+All five are for System Manager. The order passed to `create_outbound_order` is a JSON
+object (keys in `fulfillmen/order_payload.py`): `reference_no` (required, sent as
+CsRefNo), `shipping_code`, `ship_to` (`name`, `country`, `state`, `city`, `address1`
+required; `phone`, `mobile`, `email`, `company`, `area`, `address2`, `house_no`, `zip`
+optional), `items` (each `sku`, `quantity`, `weight` in kg per unit, `price`,
+`currency` USD, GBP or EUR required) and optional `tracking_no`, `remark`, `cod_type`,
+`cod_amount`, `ioss`, `vat_no`, `id_card_no`, `weight`, `length`, `width`, `height`.
+Every problem found is returned together before anything is sent.
+
+A repeated `reference_no` is safe: Fulfillmen rejects it (code 108), and the connector
+finds the existing order by that reference, stores it and returns it with
+`duplicate: true`. A create or cancel is retried on a network error or 5xx only
+because of that reference rule. Status and tracking of a created order are then kept
+current by the outbound sync and the webhook like any other order; a stored draft is
+re-read by number until it leaves the draft status.
+
+## Exact API clone: `api.wms`
+
+The Fulfillmen calls for products (read), inbound, stock, warehouses and outbound
+orders are available as whitelisted methods with the same fields in and the same
+reply out (System Manager). The request
+is passed through as given and Fulfillmen's reply comes back unchanged, success or
+failure, so anything written against the Fulfillmen docs works against these as it is.
+Query fields are arguments; a POST body is the `body` argument (JSON object or its
+text). The connector adds the API key and ignores any `Key` it is handed.
+
+Path prefix: `alaiy_os_connector_fulfillmen.api.wms.`
+
+| Method | Fulfillmen call | Docs | Changes data at Fulfillmen |
+|---|---|---|---|
+| `get_goods_list(SKU, Barcode, Page, page)` | `GET GetGoodsList.aspx` (product list, 50 per page) | 03 | no |
+| `create_asn(body)` | `POST CreateASN.aspx` (create inbound order) | 04 | yes |
+| `get_grn_list(ASNNumber, StartDate, EndDate, SKU, ReferenceNo, ASNStatus, page, pageSize)` | `GET getGRNlist.aspx` (inbound order query) | 05 | no |
+| `cancel_asn(CustomerID, body)` | `POST CancelASN.aspx` (cancel inbound order) | 06 | yes |
+| `create_order(body)` | `POST CreateOrder.aspx` | 07 | yes |
+| `get_order_list(OrderStatus, OrderNo, TrackingNo, CsRefNo, StartTime, EndTime, page)` | `GET GetOrderList.aspx` | 08 | no |
+| `get_order_details(OrderNo, TrackingNo)` | `GET GetOrderDetails.aspx` | 09 | no |
+| `intercept_order(body)` | `POST InterceptOrder.aspx` (cancel) | 10 | yes |
+| `upload_label(body)` | `POST UploadLabel.aspx` | 11 | yes |
+| `get_label_pdf(body)` | `POST GetLabelPDF.aspx` | 12 | no |
+| `get_tracking_info(No)` | `GET GetTrackingInfo.aspx` | 13 | no |
+| `get_price(body)` | `POST GetPrice.aspx` (freight quote) | 14 | no |
+| `get_inventory_list(Storage, SKU, page)` | `GET getinventorylist.aspx` | 15 | no |
+| `get_country_list()` | `GET GetCountryList.aspx` | 29 | no |
+| `get_shipping_list()` | `GET GetShippingList.aspx` | 30 | no |
+| `get_storage_list()` | `GET GetStorageList.aspx` | 31 | no |
+
+The calls that change data (marked yes) are refused until **Allow creating and
+cancelling orders** is set. A failure reply (for example code 108, repeated customer reference)
+is returned as Fulfillmen sent it; only a transport problem (HTTP error, not JSON)
+raises. Reads are retried on network errors and 5xx; an outbound create is retried only
+when it carries a `CsRefNo`, an inbound create is sent once, and a cancel and a label
+upload are retried because repeating them changes nothing.
+
+After a successful outbound create the order is saved in **Fulfillmen Outbound Order**
+(a draft is then re-read by the outbound sync until it leaves the draft status); after
+a successful outbound cancel the order is re-read, and after an inbound create or
+cancel the inbound order is re-read into **Fulfillmen Inbound Order**, so status stays
+current. A failure while saving a record never changes the reply. Product creation, bills, shop
+orders, custom orders and the other Fulfillmen calls are not cloned. `api.outbound`
+(create from a simplified order with checks, cancel, track) stays as a second way in.
+Every call, reads and writes, is written to **Fulfillmen API Log** (query only; a
+POST body is never logged).
 
 ## On-demand reads
 
