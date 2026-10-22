@@ -155,11 +155,11 @@ For a screen that should show what the warehouse says now rather than what the
 last sweep stored:
 
 - `api.inventory.list_inventory(sku, storage, page)` — one page of
-  `getinventorylist.aspx`, 20 rows (the API's own fixed size). `sku` and
-  `storage` are filters; omitting `storage` falls back to the configured
-  Warehouse Code, so a screen and the sweep cannot be scoped differently by
-  accident. Returns `rows` (`sku`, `barcode`, `available`, `on_hand`), the
-  `warehouse` the page was read for, and `has_more`.
+  `getinventorylist.aspx`. `sku` and `storage` are filters; omitting `storage`
+  falls back to the configured Warehouse Code, and with neither it reads that page
+  of every warehouse on the account. Returns `rows` (`sku`, `barcode`,
+  `available`, `on_hand`, `warehouse`), the `warehouse` when exactly one was read,
+  and `has_more`.
 - `api.inventory.list_warehouses()` — the account's warehouse codes, for a
   picker.
 
@@ -175,11 +175,18 @@ endpoint, and the row mapping is `util.inventory_row` — so the path, the page
 size and the meaning of the two quantities are written down once and the sweep
 and these reads cannot drift apart.
 
-Without a warehouse code the read spans every warehouse, and the response
-carries no warehouse field, so a SKU held in two of them comes back as two rows
-that cannot be told apart. They are returned as given rather than summed:
-summing across a paged read would add up halves of two different pages. The
-scheduled sweep does sum, because it reads every page before writing.
+Fulfillmen's inventory call needs a warehouse (without one it answers code 108),
+so with no warehouse code anywhere the connector reads the account's warehouses
+from the warehouse list. Each row says which warehouse it is from, so a SKU held in
+two of them comes back as two rows that can be told apart. They are returned as
+given rather than summed: summing across a paged read would add up halves of two
+different pages. The scheduled sweep does sum, because it reads every page of every
+warehouse before writing.
+
+The inventory call reports a warehouse with no stock, a SKU with no stock and a page
+past the end as code 105 ("no inventory") instead of an empty list, and it returns
+every row on page 1 whatever the documented page size. The connector reads it until a
+page is empty, is code 105, or adds no new row, and treats code 105 as "no rows".
 
 ## Webhook (optional)
 

@@ -99,6 +99,26 @@ def inventory_row(raw):
     }
 
 
+def collect_pages(fetch, key, max_pages=500):
+    """Every row of a paged list whose size and end are not trustworthy.
+
+    `fetch(page)` returns that page's rows (an empty list when there are none).
+    Rows are kept in order, de-duplicated by `key(row)`, and reading stops at the
+    first page that is empty or adds nothing new -- not at a page shorter than a
+    stated size, because the inventory call returns every row on page 1 whatever
+    the documented page size is, and a rule built on that size asks for a page
+    that does not exist. Safety stop after `max_pages`.
+    """
+    rows, seen = [], set()
+    for page in range(1, max_pages + 1):
+        new = [r for r in fetch(page) if key(r) not in seen]
+        if not new:
+            break
+        seen.update(key(r) for r in new)
+        rows.extend(new)
+    return rows
+
+
 def split_across(total, caps):
     """Spread `total` over lines in order, each taking at most its cap; the last
     line takes any remainder. Used when one SKU appears on several PO lines."""
