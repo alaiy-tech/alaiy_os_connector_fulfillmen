@@ -79,6 +79,26 @@ def to_number(value, default=0):
     return int(n) if n.is_integer() else n
 
 
+def inventory_row(raw):
+    """One row of the inventory list, in the names this connector uses.
+
+    The only place that endpoint's field names are written down. `TotalNumber`
+    is what can be sold and `Number` is what is on the shelf; they differ by
+    whatever is allocated but not yet picked, so neither stands in for the
+    other. The sweep that sums these onto Items and the single-page read a
+    screen makes both come through here, so the two cannot drift apart.
+
+    Here rather than in stock.py so it stays pure and testable without a bench
+    -- the module that calls the API cannot be imported without the HTTP stack.
+    """
+    return {
+        "sku": clean(raw.get("SKU")),
+        "barcode": clean(raw.get("GoodsCode")),
+        "available": to_number(raw.get("TotalNumber")),
+        "on_hand": to_number(raw.get("Number")),
+    }
+
+
 def split_across(total, caps):
     """Spread `total` over lines in order, each taking at most its cap; the last
     line takes any remainder. Used when one SKU appears on several PO lines."""

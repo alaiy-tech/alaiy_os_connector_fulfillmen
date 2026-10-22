@@ -4,7 +4,10 @@
 HTTP client for the Fulfillmen WMS Open API.
 
 Auth: the customer API key (User Center, My Information, API interface) goes in
-the `Key` query parameter of every request. There is no token exchange. Because
+the `Key` query parameter of every request, from the connector's settings or,
+failing that, from the site's own config -- see `_api_key`. There is no token
+exchange and no secret: this API signs nothing, so an access key is the whole
+credential. Because
 the key is part of the URL, every error raised from here is rewritten without
 it and raised `from None`, so neither the message nor the exception chain (and
 therefore neither the Error Log nor the Sync Log) can contain the key.
@@ -22,12 +25,42 @@ import time
 import frappe
 import requests
 
+from alaiy_os_connector_fulfillmen.fulfillmen import api_log
 from alaiy_os_connector_fulfillmen.fulfillmen.util import redact
 
 DEFAULT_BASE_URL = "https://wms.fulfillmen.com"
 TIMEOUT_SECONDS = 30
 _ATTEMPTS = 3
 _MAX_PAGES = 500   # safety stop against a server that never returns an empty page
+
+# site_config.json keys. The first holds the customer API key; the second names
+# a *different* site_config key to read it from instead. See _api_key.
+SITE_CONFIG_KEY = "fulfillmen_api_key"
+SITE_CONFIG_KEY_ALIAS = "fulfillmen_api_key_config"
+
+
+def _api_key(settings):
+    """The customer API key: the settings field, else the site's own config.
+
+    The settings field wins, so a connector configured through the Desk behaves
+    exactly as before.
+
+    The site_config fallback exists because the same account key is often
+    already on the site under another name, held for one of this vendor's other
+    APIs. Copying it into a second place would make a credential that goes stale
+    the first time the original is rotated -- silently, because the connector
+    keeps answering with the old one until a call fails. So a site that already
+    has it points at it with `fulfillmen_api_key_config` rather than repeating
+    the value, and there is still exactly one copy of the secret on the site.
+
+    Read through frappe.conf either way: a value the connector only reads never
+    enters the database, a fixture or a backup of one.
+    """
+    stored = (settings.get_password("fulfillmen_api_key", raise_exception=False) or "").strip()
+    if stored:
+        return stored
+    alias = str(frappe.conf.get(SITE_CONFIG_KEY_ALIAS) or "").strip()
+    return str(frappe.conf.get(alias or SITE_CONFIG_KEY) or "").strip()
 
 
 class FulfillmenAPIError(Exception):
@@ -55,19 +88,42 @@ def _api_message(data):
 class FulfillmenClient:
     def __init__(self):
         settings = frappe.get_single("Fulfillmen Connector Settings")
-        self.key = (settings.get_password("fulfillmen_api_key", raise_exception=False) or "").strip()
+        self.key = _api_key(settings)
         if not self.key:
-            raise FulfillmenAPIError("API Key is not set.")
+            raise FulfillmenAPIError(
+                f"API Key is not set, in the settings or as {SITE_CONFIG_KEY} in site_config.json."
+            )
         self.base_url = (settings.fulfillmen_base_url or DEFAULT_BASE_URL).rstrip("/")
         if not self.base_url.startswith("https://"):
             raise FulfillmenAPIError("Base URL must use https; the API key is sent in the URL.")
         self.storage = (settings.fulfillmen_warehouse_code or "").strip() or None
 
     def _send(self, method, path, params, json=None, retry=True):
-        """HTTP only: retries, JSON decoding, key redaction. Returns the decoded
-        reply whatever its Code is."""
+        """One API call, logged whatever happens to it. Returns (decoded reply,
+        HTTP status) whatever the reply's Code is.
+
+        The logging sits here rather than at each call site because this is the
+        only way out to Fulfillmen: a new caller is logged without having to
+        remember to be. One row per call, not per attempt -- a retry is this
+        method's business, and the duration covers all of them. Only the query is
+        logged, never a POST body (it carries a recipient's name and address).
+        """
         params = {k: v for k, v in params.items() if v not in (None, "")}
         params["Key"] = self.key
+        started = time.monotonic()
+        # Filled in by _request as it gets them, so the log row can describe a
+        # call that ended in an exception as well as one that returned.
+        seen = {}
+        try:
+            data, status = self._request(method, path, params, json, retry, seen)
+        except Exception as e:
+            api_log.record(path, params, self.key, started, resp=seen.get("resp"),
+                           data=seen.get("data"), error=e, method=method)
+            raise
+        api_log.record(path, params, self.key, started, resp=seen.get("resp"), data=data, method=method)
+        return data, status
+
+    def _request(self, method, path, params, json, retry, seen):
         attempts = _ATTEMPTS if retry else 1
         last = None
         for attempt in range(attempts):
@@ -78,6 +134,7 @@ class FulfillmenClient:
             except requests.RequestException as e:
                 last = FulfillmenAPIError("Request failed: " + redact(e, self.key))
                 continue
+            seen["resp"] = resp
             if resp.status_code >= 500:
                 last = FulfillmenAPIError(f"HTTP {resp.status_code} from Fulfillmen.", resp.status_code)
                 continue
@@ -89,6 +146,7 @@ class FulfillmenClient:
                 raise FulfillmenAPIError("Fulfillmen did not return JSON.", resp.status_code) from None
             if not isinstance(data, dict):
                 raise FulfillmenAPIError("Unexpected Fulfillmen response shape.", resp.status_code) from None
+            seen["data"] = data
             return data, resp.status_code
         raise last from None
 

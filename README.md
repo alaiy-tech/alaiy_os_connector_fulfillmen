@@ -17,6 +17,7 @@ here.
 | **Fulfillmen Outbound Order** (+ lines table) | outbound order, named by the order number | customer reference, status and code, shipping service, waybill, created and ship time, tracking status and events; per line: SKU, quantity |
 | **Item** (read-only custom fields) | existing Item whose item code = SKU | `fulfillmen_available_stock`, `fulfillmen_shelf_stock`, `fulfillmen_stock_synced_at`, `fulfillmen_registered`, `fulfillmen_barcode`, `fulfillmen_qc_weight/length/width/height` |
 | **Fulfillmen Sync Log** | each run | queued / running / success / failed, processed / updated / unmatched / failed counts, notes |
+| **Fulfillmen API Log** | each API call | method, path, context, outcome, HTTP status, envelope `Code` and message, duration, query parameters (never the key), the response body in full |
 | **Fulfillmen Connector Settings** | single | enable, base URL, API key, warehouse code, webhook secrets, interval, look-back days |
 
 Every API field in the staging records is read only. The one exception is a Link
@@ -70,8 +71,8 @@ about two hours, so they are not stored.
 
 ## Outbound orders: create, cancel, track
 
-Off until **Allow creating and cancelling orders** is set (and **Enable Fulfillmen**). The same switch covers the inbound create and cancel of the clone below.
-Settings used: Customer ID, Default Shipping Service Code, Order Style (1 warehouse
+Off until **Allow creating and cancelling orders** is set (and **Enable Fulfillmen**).
+The same switch covers the inbound create and cancel of the clone below. Settings used: Customer ID, Default Shipping Service Code, Order Style (1 warehouse
 order, which also uses **Warehouse Code**; 2 ordinary order) and Status When Created
 (Draft by default: Fulfillmen holds a draft until it is confirmed; Confirmed makes
 Fulfillmen start fulfilling it).
@@ -103,8 +104,8 @@ re-read by number until it leaves the draft status.
 ## Exact API clone: `api.wms`
 
 The Fulfillmen calls for products (read), inbound, stock, warehouses and outbound
-orders are available as whitelisted
-method with the same fields in and the same reply out (System Manager). The request
+orders are available as whitelisted methods with the same fields in and the same
+reply out (System Manager). The request
 is passed through as given and Fulfillmen's reply comes back unchanged, success or
 failure, so anything written against the Fulfillmen docs works against these as it is.
 Query fields are arguments; a POST body is the `body` argument (JSON object or its
@@ -142,10 +143,43 @@ After a successful outbound create the order is saved in **Fulfillmen Outbound O
 (a draft is then re-read by the outbound sync until it leaves the draft status); after
 a successful outbound cancel the order is re-read, and after an inbound create or
 cancel the inbound order is re-read into **Fulfillmen Inbound Order**, so status stays
-current. A
-failure while saving a record never changes the reply. Product creation, bills, shop
-orders, custom orders and the other Fulfillmen calls are not cloned. `api.outbound` (create from
-a simplified order with checks, cancel, track) stays as a second way in.
+current. A failure while saving a record never changes the reply. Product creation, bills, shop
+orders, custom orders and the other Fulfillmen calls are not cloned. `api.outbound`
+(create from a simplified order with checks, cancel, track) stays as a second way in.
+Every call, reads and writes, is written to **Fulfillmen API Log** (query only; a
+POST body is never logged).
+
+## On-demand reads
+
+For a screen that should show what the warehouse says now rather than what the
+last sweep stored:
+
+- `api.inventory.list_inventory(sku, storage, page)` — one page of
+  `getinventorylist.aspx`, 20 rows (the API's own fixed size). `sku` and
+  `storage` are filters; omitting `storage` falls back to the configured
+  Warehouse Code, so a screen and the sweep cannot be scoped differently by
+  accident. Returns `rows` (`sku`, `barcode`, `available`, `on_hand`), the
+  `warehouse` the page was read for, and `has_more`.
+- `api.inventory.list_warehouses()` — the account's warehouse codes, for a
+  picker.
+
+Both check `read` permission on Item and return their failure in an `error`
+field instead of raising: an empty table and an unreachable warehouse are
+different answers, and a caller that cannot tell them apart reports "no stock"
+for an outage. Neither can be called from a browser directly — the API key is a
+URL query parameter, so the call only ever happens server-side.
+
+Both are thin wrappers. The calls themselves are `fulfillmen/stock.py`'s
+`read_page` and `warehouse_codes`, next to the sweep that walks the same
+endpoint, and the row mapping is `util.inventory_row` — so the path, the page
+size and the meaning of the two quantities are written down once and the sweep
+and these reads cannot drift apart.
+
+Without a warehouse code the read spans every warehouse, and the response
+carries no warehouse field, so a SKU held in two of them comes back as two rows
+that cannot be told apart. They are returned as given rather than summed:
+summing across a paged read would add up halves of two different pages. The
+scheduled sweep does sum, because it reads every page before writing.
 
 ## Webhook (optional)
 
@@ -158,8 +192,17 @@ data; it only triggers a re-read through the authenticated API of the inbound or
 
 ## Auth and safety
 
-- The customer API key goes in the `Key` query parameter of every request. It is
-  stored in a Password field and trimmed. Because it is part of the URL, every
+- The customer API key goes in the `Key` query parameter of every request. There
+  is no secret and nothing is signed, so the key is the whole credential. It is
+  read from the `fulfillmen_api_key` Password field, falling back to the site's
+  `site_config.json`. A site that already holds this account key under another
+  name, for one of the vendor's other APIs, sets
+  `"fulfillmen_api_key_config": "<that key's name>"` and the connector reads it
+  from there — so the site keeps one copy of the secret rather than a second one
+  that goes stale the first time the original is rotated. Otherwise the
+  connector looks for `fulfillmen_api_key` in `site_config.json` directly.
+  Either fallback is read through `frappe.conf` and never written to the
+  database. Because it is part of the URL, every
   error raised from the HTTP layer is rewritten without the key (also in its
   URL-encoded forms) and raised without its cause chain, so it cannot reach the
   Error Log or Sync Log.
@@ -167,6 +210,31 @@ data; it only triggers a re-read through the authenticated API of the inbound or
 - Timeout 30 s; connection errors and 5xx are retried 3 times with backoff; an
   API-level failure (`Code` other than `100`) is not retried.
 - Paging stops on a short page; the API's `count` field is not relied on.
+
+## API call log
+
+Every call writes one **Fulfillmen API Log** row — path, context, outcome, HTTP
+status, the envelope `Code` and message, duration and the response body in
+full. Written from `FulfillmenClient.get`, which is the only way out to the
+API, so a new caller is logged without having to remember to be. One row per
+call rather than per attempt; the duration covers any retries.
+
+**The key is never stored.** This API takes it as a query parameter, so the
+parameters are the one place a secret could reach a log table: `Key` is dropped
+by name before the row is built, and every text field on the row is redacted by
+value afterwards, which also catches a response that echoed the request URL —
+and matters more now that the body is kept whole, since the key could sit
+anywhere in it.
+
+Rows go out on their own database connection, committed immediately. Writing
+through the caller's transaction would mean either committing a half-finished
+sweep or losing the row to the caller's rollback — and a rolled-back call is
+usually the one worth having a row for. A failure to log is logged to the Error
+Log and never fails the call it was describing.
+
+Retention is 30 days, via frappe's Log Settings. The controller implements
+`clear_old_logs` because Log Settings silently ignores a doctype that does not,
+which is how a log table ends up unbounded.
 
 ## What it cannot see
 
@@ -181,5 +249,5 @@ data; it only triggers a re-read through the authenticated API of the inbound or
 
 ## Tests
 
-`python -m unittest alaiy_os_connector_fulfillmen.tests.test_util alaiy_os_connector_fulfillmen.tests.test_webhook`
+`python -m unittest alaiy_os_connector_fulfillmen.tests.test_util alaiy_os_connector_fulfillmen.tests.test_webhook alaiy_os_connector_fulfillmen.tests.test_api_log`
 (pure helpers, no bench needed).

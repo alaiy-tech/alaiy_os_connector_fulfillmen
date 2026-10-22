@@ -1,0 +1,127 @@
+import json
+import sys
+import time
+import types
+import unittest
+
+# The log module imports frappe; stand in for it only where it is absent (a
+# bench has the real one). Everything tested here is pure -- the row is built
+# without touching a database.
+if "frappe" not in sys.modules:
+    sys.modules["frappe"] = types.ModuleType("frappe")
+
+from alaiy_os_connector_fulfillmen.fulfillmen.api_log import _row, context_for, safe_params
+
+KEY = "271bd87a-60bd-4ef8-b3bc-5192e2e72de310000"
+
+
+class Resp:
+    def __init__(self, status_code=200, text=""):
+        self.status_code = status_code
+        self.text = text
+
+
+class TestContext(unittest.TestCase):
+    def test_context_from_the_path(self):
+        self.assertEqual(context_for("/api-json/getinventorylist.aspx"), "inventory")
+        self.assertEqual(context_for("/api-json/GetStorageList.aspx"), "storage_list")
+        self.assertEqual(context_for("/api-json/GetTrackingInfo.aspx"), "tracking")
+        self.assertEqual(context_for("/api-json/CreateOrder.aspx"), "outbound")
+        self.assertEqual(context_for("/api-json/InterceptOrder.aspx"), "outbound")
+        self.assertEqual(context_for("/api-json/CreateASN.aspx"), "inbound")
+        self.assertEqual(context_for("/api-json/CancelASN.aspx"), "inbound")
+
+    def test_row_records_the_method_and_no_body(self):
+        from types import SimpleNamespace
+        resp = SimpleNamespace(status_code=200, text="{}")
+        row = _row("/api-json/CreateOrder.aspx", {"Key": "K", "x": 1}, "K", 0.0, resp=resp,
+                   data={"Code": "100"}, method="POST")
+        self.assertEqual(row["method"], "POST")
+        self.assertEqual(row["outcome"], "Success")
+        self.assertNotIn("K", row["query_params"].replace('"x"', ""))
+
+    def test_an_unmapped_path_is_other_not_a_crash(self):
+        self.assertEqual(context_for("/api-json/SomethingNew.aspx"), "other")
+        self.assertEqual(context_for(""), "other")
+        self.assertEqual(context_for(None), "other")
+
+
+class TestKeyNeverStored(unittest.TestCase):
+    """The key is a query parameter on this API, so the log is the one place it
+    could leak into the database. These are the tests that matter most here."""
+
+    def test_params_drop_the_key(self):
+        text = safe_params({"Key": KEY, "SKU": "A1", "page": 1}, KEY)
+        self.assertNotIn(KEY, text)
+        self.assertEqual(json.loads(text), {"SKU": "A1", "page": 1})
+
+    def test_params_drop_the_key_whatever_its_case(self):
+        self.assertNotIn(KEY, safe_params({"key": KEY}, KEY))
+        self.assertNotIn(KEY, safe_params({"KEY": KEY}, KEY))
+
+    def test_the_key_is_redacted_even_under_another_name(self):
+        # Dropped by name first, then redacted by value, so a key that reached
+        # the parameters some other way still cannot be written.
+        self.assertNotIn(KEY, safe_params({"SKU": KEY}, KEY))
+
+    def test_no_part_of_the_row_carries_the_key(self):
+        # An echo of the request URL in the body is exactly how a key reaches a
+        # log table, so the excerpt and the message are redacted too.
+        row = _row(
+            "/api-json/getinventorylist.aspx",
+            {"Key": KEY, "SKU": "A1"},
+            KEY,
+            time.monotonic(),
+            resp=Resp(200, f'{{"Code":"108","Enmessage":"fails for Key={KEY}"}}'),
+            data={"Code": "108", "Enmessage": f"fails for Key={KEY}"},
+        )
+        self.assertNotIn(KEY, json.dumps(row))
+
+
+class TestOutcome(unittest.TestCase):
+    def test_a_200_carrying_a_bad_code_is_a_failure(self):
+        row = _row("/api-json/getinventorylist.aspx", {}, KEY, time.monotonic(),
+                   resp=Resp(200, "{}"), data={"Code": "108", "Enmessage": "fails"})
+        self.assertEqual(row["outcome"], "Failed")
+        self.assertEqual(row["api_code"], "108")
+        self.assertEqual(row["api_message"], "fails")
+        self.assertEqual(row["status_code"], 200)
+
+    def test_code_100_is_a_success(self):
+        row = _row("/api-json/getinventorylist.aspx", {}, KEY, time.monotonic(),
+                   resp=Resp(200, "{}"), data={"Code": "100", "data": []})
+        self.assertEqual(row["outcome"], "Success")
+        self.assertEqual(row["api_code"], "100")
+
+    def test_a_call_that_never_returned(self):
+        row = _row("/api-json/getinventorylist.aspx", {}, KEY, time.monotonic(),
+                   error=ValueError("connection reset"))
+        self.assertEqual(row["outcome"], "Failed")
+        self.assertEqual(row["status_code"], 0)
+        self.assertIn("connection reset", row["api_message"])
+
+    def test_a_non_200_is_a_failure_even_with_no_envelope(self):
+        row = _row("/api-json/getinventorylist.aspx", {}, KEY, time.monotonic(), resp=Resp(403, "nope"))
+        self.assertEqual(row["outcome"], "Failed")
+        self.assertEqual(row["status_code"], 403)
+
+    def test_the_response_is_stored_whole(self):
+        # Not truncated: a cut-off body is the one that stops just before the
+        # part explaining the failure.
+        body = "x" * 20000
+        row = _row("/api-json/getinventorylist.aspx", {}, KEY, time.monotonic(),
+                   resp=Resp(200, body), data={"Code": "100"})
+        self.assertEqual(row["response_excerpt"], body)
+
+    def test_a_long_response_is_still_redacted(self):
+        # Keeping the whole body is what makes this matter: the key can sit
+        # anywhere in it, not just in the first few thousand characters.
+        body = "x" * 20000 + f"&Key={KEY}" + "y" * 20000
+        row = _row("/api-json/getinventorylist.aspx", {}, KEY, time.monotonic(),
+                   resp=Resp(200, body), data={"Code": "100"})
+        self.assertNotIn(KEY, row["response_excerpt"])
+        self.assertEqual(len(row["response_excerpt"]), len(body) - len(KEY) + len("***"))
+
+
+if __name__ == "__main__":
+    unittest.main()

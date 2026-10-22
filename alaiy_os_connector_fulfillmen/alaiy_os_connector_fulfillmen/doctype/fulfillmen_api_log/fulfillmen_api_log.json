@@ -1,0 +1,142 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "hash",
+ "creation": "2026-10-14 00:00:00.000000",
+ "description": "One row per Fulfillmen Open API call, for observability. Written best-effort by fulfillmen/api_log.py; never rename or edit rows by hand.",
+ "doctype": "DocType",
+ "editable_grid": 0,
+ "engine": "InnoDB",
+ "field_order": [
+  "method",
+  "path",
+  "context",
+  "outcome",
+  "column_break_meta",
+  "status_code",
+  "api_code",
+  "duration_ms",
+  "section_request",
+  "query_params",
+  "section_response",
+  "api_message",
+  "response_excerpt"
+ ],
+ "fields": [
+  {
+   "fieldname": "method",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Method",
+   "read_only": 1
+  },
+  {
+   "description": "API path only. The query string is stored separately, without the key.",
+   "fieldname": "path",
+   "fieldtype": "Small Text",
+   "in_list_view": 1,
+   "label": "Path",
+   "read_only": 1
+  },
+  {
+   "fieldname": "context",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Context",
+   "options": "\ninventory\nstorage_list\nproducts\ninbound\noutbound\norder_detail\ntracking\nother",
+   "read_only": 1
+  },
+  {
+   "default": "Success",
+   "description": "Failed covers a transport error, a non-200, and a Code other than 100 in the envelope — which a 200 can still carry.",
+   "fieldname": "outcome",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Outcome",
+   "options": "Success\nFailed",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_meta",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "HTTP status, or 0 when the call never reached Fulfillmen.",
+   "fieldname": "status_code",
+   "fieldtype": "Int",
+   "in_standard_filter": 1,
+   "label": "Status Code",
+   "read_only": 1
+  },
+  {
+   "description": "Fulfillmen envelope Code (\"100\" is success).",
+   "fieldname": "api_code",
+   "fieldtype": "Data",
+   "in_standard_filter": 1,
+   "label": "API Code",
+   "read_only": 1
+  },
+  {
+   "description": "Total for the call, including any retries.",
+   "fieldname": "duration_ms",
+   "fieldtype": "Int",
+   "label": "Duration (ms)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_request",
+   "fieldtype": "Section Break",
+   "label": "Request"
+  },
+  {
+   "description": "Query parameters as JSON. The API key is never among them: this API takes it as a query parameter, so it is dropped before the row is built and the text is redacted again afterwards.",
+   "fieldname": "query_params",
+   "fieldtype": "Long Text",
+   "label": "Query Params",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_response",
+   "fieldtype": "Section Break",
+   "label": "Response"
+  },
+  {
+   "description": "Fulfillmen envelope message, or the transport error when the call never returned.",
+   "fieldname": "api_message",
+   "fieldtype": "Small Text",
+   "label": "API Message",
+   "read_only": 1
+  },
+  {
+   "description": "The response as it arrived, in full — with the API key redacted, in case it was echoed back. The fieldname still says excerpt because the column predates the decision to keep the whole body.",
+   "fieldname": "response_excerpt",
+   "fieldtype": "Long Text",
+   "label": "Response Body",
+   "read_only": 1
+  }
+ ],
+ "in_create": 1,
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-14 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Alaiy Os Connector Fulfillmen",
+ "name": "Fulfillmen API Log",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "delete": 1,
+   "export": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager"
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0
+}

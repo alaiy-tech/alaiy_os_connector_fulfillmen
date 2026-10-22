@@ -1,10 +1,19 @@
 # Copyright (c) 2026, Alaiy and contributors
 # For license information, please see license.txt
 """
-Warehouse stock. Reads Fulfillmen inventory and stores the totals on the Item
-whose item_code equals the SKU. Read only; no document is created.
+Warehouse stock. Everything that reads Fulfillmen inventory lives here, so the
+endpoint's path, its page size and the meaning of its two quantities are
+written down once:
+
+  * the sweep (`sync_stock`, `refresh_sku`) walks every page and stores the
+    totals on the Item whose item_code equals the SKU;
+  * `read_page` answers a single page to whoever is asking now, and writes
+    nothing.
+
+Read only; no document is created.
 
   GET /api-json/getinventorylist.aspx   (filters: Storage, SKU, page; 20 rows per page)
+  GET /api-json/GetStorageList.aspx     (the warehouse codes that scope the above)
 
   TotalNumber  available stock -> fulfillmen_available_stock
   Number       shelf stock     -> fulfillmen_shelf_stock
@@ -28,9 +37,10 @@ from frappe.utils import now_datetime
 
 from alaiy_os_connector_fulfillmen.fulfillmen.client import FulfillmenClient
 from alaiy_os_connector_fulfillmen.fulfillmen.common import new_result
-from alaiy_os_connector_fulfillmen.fulfillmen.util import clean, to_number
+from alaiy_os_connector_fulfillmen.fulfillmen.util import clean, inventory_row, to_number
 
 INVENTORY_PATH = "/api-json/getinventorylist.aspx"
+STORAGE_PATH = "/api-json/GetStorageList.aspx"
 PAGE_SIZE = 20   # fixed by the API
 _FIELDS = ["fulfillmen_available_stock", "fulfillmen_shelf_stock"]
 
@@ -38,13 +48,13 @@ _FIELDS = ["fulfillmen_available_stock", "fulfillmen_shelf_stock"]
 def _totals(rows):
     """{sku: [available, shelf]} summed over the rows."""
     totals = {}
-    for row in rows:
-        sku = clean(row.get("SKU"))
-        if not sku:
+    for raw in rows:
+        row = inventory_row(raw)
+        if not row["sku"]:
             continue
-        t = totals.setdefault(sku, [0, 0])
-        t[0] += to_number(row.get("TotalNumber"))
-        t[1] += to_number(row.get("Number"))
+        t = totals.setdefault(row["sku"], [0, 0])
+        t[0] += row["available"]
+        t[1] += row["on_hand"]
     return totals
 
 
@@ -113,3 +123,52 @@ def refresh_sku(sku):
     apply_totals(_totals(rows) or {sku: [0, 0]}, result)
     frappe.db.commit()
     return result
+
+
+def read_page(sku=None, storage=None, page=1):
+    """One page of the inventory list, unaggregated and written nowhere.
+
+    The same endpoint, client and page size as the sweep above, asked a
+    narrower question: what does the warehouse say right now. Nothing touches
+    an Item, so this answers for SKUs that have no Item at all -- which the
+    sweep counts as unmatched and drops.
+
+    `storage` falls back to the configured Warehouse Code, so a caller and the
+    sweep cannot end up scoped differently by accident. Without either, the
+    read spans every warehouse the account can see and the response carries no
+    warehouse field, so a SKU held in two of them is two rows that cannot be
+    told apart. They are returned as they came rather than summed the way
+    `_totals` sums them: that is safe over every page and wrong over one, where
+    it would add up halves of two different pages.
+
+    `has_more` is a full page rather than the response's `count` -- the docs
+    call that a total without guaranteeing it, which is why `pages()` ignores
+    it too. A catalogue that is an exact multiple of the page size therefore
+    offers one empty last page, the harmless direction to be wrong in.
+
+    Raises FulfillmenAPIError, like every other call here.
+    """
+    client = FulfillmenClient()
+    warehouse = clean(storage) or client.storage
+    raw = client.get(
+        INVENTORY_PATH,
+        page=page,
+        Storage=warehouse,
+        SKU=clean(sku) or None,
+    ).get("data") or []
+
+    rows = [row for row in (inventory_row(r) for r in raw) if row["sku"]]
+    return {"rows": rows, "warehouse": warehouse or None, "has_more": len(raw) >= PAGE_SIZE}
+
+
+def warehouse_codes():
+    """The warehouse codes this account can see.
+
+    The cheapest read that needs nothing but the API key, which is why the
+    connection test uses it as its key check too. A warehouse code is what
+    scopes every stock read, so the list of them belongs here with them.
+
+    Raises FulfillmenAPIError.
+    """
+    rows = FulfillmenClient().get(STORAGE_PATH).get("data") or []
+    return [code for code in (clean(r.get("ShortName")) for r in rows) if code]
